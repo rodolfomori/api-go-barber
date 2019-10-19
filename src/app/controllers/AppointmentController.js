@@ -1,36 +1,55 @@
-import * as Yup from 'yup';
-import Appointment from '../models/Appointment';
-import User from '../models/User';
+import * as Yup from "yup";
+import { StartOfHour, parseISO, isBefore } from "date-fns";
+import User from "../models/User";
+import Appointment from "../models/Appointment";
 
 class AppointmentController {
   async store(req, res) {
     const schema = Yup.object().shape({
       provider_id: Yup.number().required(),
-      date: Yup.date().required(),
+      date: Yup.date().required()
     });
 
     if (!(await schema.isValid(req.body))) {
-      return res.status(400).json({ Error: 'Validations Fails' });
+      return res.status(400).json({ error: "Validations Fails" });
     }
 
     const { provider_id, date } = req.body;
 
     // Check if provider_id is a provider
 
-    const idProvider = await User.findOne({
-      where: { id: provider_id, provider: true },
+    const checkIsProvider = await User.findOne({
+      where: { id: provider_id, provider: true }
     });
 
-    if (!idProvider) {
+    if (!checkIsProvider) {
       return res
         .status(401)
-        .json({ Error: 'You can only create appointments with providers' });
+        .json({ Error: "You can only create appointments with providers" });
     }
+
+    // check for past dates
+    const hourStart = StartOfHour(parseISO(date));
+
+    if (isBefore(hourStart, new Date())) {
+      return res.status(400).json({ error: "Past dates are not permitted" });
+    }
+
+    // check for provider has a appointment
+    // const checkAvailibility = await Appointment.findOne({
+    //   where: { provider_id, canceled_at: null, date: hourStart }
+    // });
+
+    // if (checkAvailibility) {
+    //   return res
+    //     .status(400)
+    //     .json({ error: "Appointment date is not available" });
+    // }
 
     const appointment = await Appointment.create({
       user_id: req.userId,
       provider_id,
-      date,
+      date
     });
 
     return res.json(appointment);
